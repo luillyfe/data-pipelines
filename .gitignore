@@ -1,0 +1,33 @@
+# Compiled object files
+*.o
+*.a
+
+# Executable files
+*.exe
+*.dll
+*.so
+
+# Test files
+*_test.go
+*_test.s
+
+# Build artifacts
+*.out
+*.bin
+*.tar.gz
+*.zip
+
+# Dependency directories
+vendor/
+**/vendor/
+
+# IDE files
+*.iml
+*.ipr
+*.iws
+*.idea/
+*.vscode/
+
+# Other files
+.DS_Store
+Thumbs.db
