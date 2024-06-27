@@ -14,6 +14,9 @@ import (
 )
 
 func main() {
+	// Init Apache Beam
+	beam.Init()
+
 	// Flag for input and output files
 	input := flag.String("input", "input.txt", "Input file to process")
 	output := flag.String("output", "output.txt", "Output file to write results")
@@ -27,8 +30,10 @@ func main() {
 	lines := textio.Read(s, *input)
 
 	// Convert lines to lowercase and split into words
-	words := beam.ParDo(s, func(line string) []string {
-		return regexp.MustCompile(`\w+`).FindAllString(line, -1)
+	words := beam.ParDo(s, func(line string, emit func(string)) {
+		for _, word := range regexp.MustCompile(`\w+`).FindAllString(line, -1) {
+			emit(word)
+		}
 	}, lines)
 
 	// Count word occurrences
@@ -44,11 +49,21 @@ func main() {
 
 	// Format results
 	formatted := beam.ParDo(s, func(word string, count int) string {
-		return fmt.Sprintf("%s: %d", word, count)
+		if word != "" {
+			return fmt.Sprintf("%s: %d", word, count)
+		}
+		return ""
 	}, filtered)
 
+	// Remove empty strings
+	nonEmpty := beam.ParDo(s, func(s string, emit func(string)) {
+		if s != "" {
+			emit(s)
+		}
+	}, formatted)
+
 	// Write results to output file
-	textio.Write(s, *output, formatted)
+	textio.Write(s, *output, nonEmpty)
 
 	// Run the pipeline
 	if err := beamx.Run(context.Background(), p); err != nil {
