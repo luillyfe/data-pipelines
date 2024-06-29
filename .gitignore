@@ -31,3 +31,4 @@ vendor/
 # Other files
 .DS_Store
 Thumbs.db
+.files/**

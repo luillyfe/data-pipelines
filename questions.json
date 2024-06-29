@@ -1,0 +1,13 @@
+[
+  {
+    "id": "question1",
+    "text": "Bean There, Brewed That requires near real-time matching of customer orders with available baristas.  Describe a data ingestion and processing architecture that ensures low latency matching, considering factors like location proximity, barista specialization, and order volume.",
+    "type": "free_response",
+    "author": "Gemini 1.5 Pro",
+    "sections": [
+      "Designing Data Processing Systems",
+      "Ingesting/Processing Data"
+    ],
+    "labels": ["Real-time Processing", "Data Pipelines", "Scalability"]
+  }
+]
