@@ -19,7 +19,11 @@ type Question struct {
 func readQuestions(s beam.Scope, filename string) beam.PCollection {
 	s = s.Scope("ReadQuestions")
 
-	// Read the file line by line
+	// ARD: Read the file at once. Since it a json item must be
+	// spread across multiple lines, we read it at once the pull the json array.
+	// Note that textio.Immediate would not work, since it returns a PCollection
+	// of the entire jsonString and to convert it to a PCollections of []Question
+	// would require addition effort.
 	jsonContent := readFile(filename)
 
 	// Create a PCollection
