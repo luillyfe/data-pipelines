@@ -19,11 +19,9 @@ type Question struct {
 func readQuestions(s beam.Scope, filename string) beam.PCollection {
 	s = s.Scope("ReadQuestions")
 
-	// ARD: Read the file at once. Since it a json item must be
-	// spread across multiple lines, we read it at once the pull the json array.
-	// Note that textio.Immediate would not work, since it returns a PCollection
-	// of the entire jsonString and to convert it to a PCollections of []Question
-	// would require addition effort.
+	// ARD: Read the file at once. We need access to the whole json
+	// byte string at once (indented json) to be able to unmarshal it
+	// to the proper struct.
 	jsonContent := readFile(filename)
 
 	// Create a PCollection
@@ -80,12 +78,14 @@ func isNilQuestion(q *Question) bool {
 }
 
 func validateQuestion(q *Question) error {
-	if q.ID == "" {
-		return fmt.Errorf("question ID is empty")
-	}
 	if q.Text == "" {
 		return fmt.Errorf("question text is empty")
 	}
-	// Add more validation as needed
+	if q.Type == "" {
+		return fmt.Errorf("question type is empty")
+	}
+	if q.Author == "" {
+		return fmt.Errorf("question author is empty")
+	}
 	return nil
 }
