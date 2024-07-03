@@ -2,12 +2,11 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"flag"
 	"log"
+	"os"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam"
-	"github.com/apache/beam/sdks/v2/go/pkg/beam/io/textio"
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/transforms/filter"
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/x/beamx"
 )
@@ -16,9 +15,12 @@ func main() {
 	// Init Apache Beam
 	beam.Init()
 
+	// Get env vars
+	PROJECT_ID := os.Getenv("PROJECT_ID")
+	COLLECTION := os.Getenv("COLLECTION")
+
 	// Flag for input and output files
 	input := flag.String("input", "input.txt", "Input file to process")
-	output := flag.String("output", "output.txt", "Output file to write results")
 	flag.Parse()
 
 	// Create the pipeline
@@ -28,7 +30,7 @@ func main() {
 	// Read questions as PCollection of []Question
 	questions := readQuestions(s, *input)
 
-	// Validate questions to math schema (id, text)
+	// Validate questions to match schema (text, type, author)
 	validQuestions := beam.ParDo(s, func(q *Question) (*Question, error) {
 		if err := validateQuestion(q); err != nil {
 			return nil, err
@@ -39,11 +41,14 @@ func main() {
 	// Filter out nil questions
 	validQuestions = filter.Exclude(s, validQuestions, isNilQuestion)
 
-	// Write the processed questions to a JSONL file
-	textio.Write(s, *output, beam.ParDo(s, func(q *Question) string {
-		data, _ := json.Marshal(q)
-		return string(data)
-	}, validQuestions))
+	// Initialize the firestore writer
+	firestoreWriter := &FirestoreWriter{
+		ProjectID:  PROJECT_ID,
+		Collection: COLLECTION,
+	}
+
+	// Write to Firestore
+	beam.ParDo0(s, firestoreWriter, validQuestions)
 
 	// Run the pipeline
 	if err := beamx.Run(context.Background(), p); err != nil {
