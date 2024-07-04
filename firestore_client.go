@@ -29,7 +29,7 @@ type FirestoreWriter struct {
 	lastWrite  time.Time
 }
 
-func (f *FirestoreWriter) ProcessElement(question *Question) error {
+func (f *FirestoreWriter) ProcessElement(ctx context.Context, question *Question) error {
 	// Lock the mutex to ensure thread-safety
 	// This is necessary because ProcessElement might be called concurrently
 	f.mu.Lock()
@@ -50,10 +50,17 @@ func (f *FirestoreWriter) ProcessElement(question *Question) error {
 	// Based on time: When maxBatchTime has elapsed since the last flush.
 	// This ensures that we're balancing between efficient batching and timely writes.
 	if f.count >= maxBatchSize || time.Since(f.lastWrite) >= maxBatchTime {
-		f.bulkWriter.Flush()
+		f.flush()
 	}
 
 	return nil
+}
+
+// This registration is crucial for serialization purposes in distributed processing environments.
+func init() {
+	// 2 inputs and 1 output => DoFn2x1
+	// Type arguments [context.Context, *Question, error]
+	register.DoFn2x1(&FirestoreWriter{})
 }
 
 // Called once per bundle
@@ -78,13 +85,19 @@ func (f *FirestoreWriter) Teardown() error {
 	return nil
 }
 
-func (f *FirestoreWriter) FinishBundle() {
-	f.bulkWriter.Flush()
+func (f *FirestoreWriter) FinishBundle(ctx context.Context) {
+	f.flush()
 }
 
-// This registration is crucial for serialization purposes in distributed processing environments.
-func init() {
-	// 2 inputs and 1 output => DoFn2x1
-	// Type arguments [context.Context, *Question, error]
-	register.DoFn1x1(&FirestoreWriter{})
+func (f *FirestoreWriter) flush() error {
+	if f.count == 0 {
+		return nil
+	}
+
+	f.bulkWriter.Flush()
+	log.Printf("Successfully wrote batch of %d questions", f.count)
+
+	f.count = 0
+	f.lastWrite = time.Now()
+	return nil
 }
