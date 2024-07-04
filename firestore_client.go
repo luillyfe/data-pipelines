@@ -13,7 +13,7 @@ import (
 
 // https://firebase.google.com/docs/firestore/manage-data/transactions
 const (
-	maxBatchSize = 500 // A batched write can contain up to 500 operations.
+	maxBatchSize = 100 // A batched write can contain up to 500 operations.
 	maxBatchTime = 1 * time.Second
 )
 
