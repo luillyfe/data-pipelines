@@ -29,7 +29,7 @@ type FirestoreWriter struct {
 	lastWrite  time.Time
 }
 
-func (f *FirestoreWriter) ProcessElement(ctx context.Context, question *Question) error {
+func (f *FirestoreWriter) ProcessElement(question *Question) error {
 	// Lock the mutex to ensure thread-safety
 	// This is necessary because ProcessElement might be called concurrently
 	f.mu.Lock()
@@ -86,5 +86,5 @@ func (f *FirestoreWriter) FinishBundle() {
 func init() {
 	// 2 inputs and 1 output => DoFn2x1
 	// Type arguments [context.Context, *Question, error]
-	register.DoFn2x1(&FirestoreWriter{})
+	register.DoFn1x1(&FirestoreWriter{})
 }
