@@ -2,13 +2,18 @@ module github.com/luillyfe/data-pipelines
 
 go 1.21.3
 
-require github.com/apache/beam/sdks/v2 v2.56.0
+require (
+	cloud.google.com/go/firestore v1.15.0
+	github.com/apache/beam/sdks/v2 v2.56.0
+	google.golang.org/api v0.171.0
+)
 
 require (
 	cloud.google.com/go v0.112.1 // indirect
 	cloud.google.com/go/compute v1.25.1 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.7 // indirect
+	cloud.google.com/go/longrunning v0.5.6 // indirect
 	cloud.google.com/go/profiler v0.4.0 // indirect
 	cloud.google.com/go/storage v1.39.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
@@ -49,7 +54,6 @@ require (
 	golang.org/x/text v0.15.0 // indirect
 	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/tools v0.14.0 // indirect
-	google.golang.org/api v0.171.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20240308144416-29370a3891b7 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240520151616-dc85e6b867a5 // indirect
