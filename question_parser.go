@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam"
 )
@@ -13,6 +15,18 @@ type Question struct {
 	Author   string   `json:"author"`
 	Sections []string `json:"sections"`
 	Labels   []string `json:"labels"`
+}
+
+type Choice struct {
+	Label string `json:"option"`
+	Text  string `json:"description"`
+}
+
+type MultipleChoiceQuestion struct {
+	Question    *Question
+	Choices     []Choice `json:"choices"`
+	Answer      string   `json:"answer"`
+	Explanation string   `json:"explanation"`
 }
 
 func readQuestions(s beam.Scope, filename string) beam.PCollection {
@@ -87,4 +101,51 @@ func validateQuestion(q *Question) error {
 		return fmt.Errorf("question author is empty")
 	}
 	return nil
+}
+
+func parseLLMOutput(modelOutput string, originalQuestion *Question) (*MultipleChoiceQuestion, error) {
+	mQuestion := &MultipleChoiceQuestion{
+		Question: originalQuestion,
+	}
+	originalQuestion.Type = "multiple_choice"
+
+	// Regular expressions for parsing
+	choiceRegex := regexp.MustCompile(`([A-D])\. (.*)`)
+	answerRegex := regexp.MustCompile(`Answer: ([A-D])`)
+	explanationRegex := regexp.MustCompile(`Explanation: (.*)`)
+
+	// Split input into lines
+	lines := strings.Split(modelOutput, "\n")
+
+	// Parse choices
+	var currentChoice *Choice
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if match := choiceRegex.FindStringSubmatch(line); match != nil {
+			if currentChoice != nil {
+				mQuestion.Choices = append(mQuestion.Choices, *currentChoice)
+			}
+			currentChoice = &Choice{
+				Label: match[1],
+				Text:  match[2],
+			}
+		} else if currentChoice != nil {
+			currentChoice.Text += " " + line
+		}
+	}
+	if currentChoice != nil {
+		mQuestion.Choices = append(mQuestion.Choices, *currentChoice)
+	}
+
+	// Parse answer
+	if match := answerRegex.FindStringSubmatch(modelOutput); match != nil {
+		mQuestion.Answer = match[1]
+	}
+
+	// Parse explanation
+	if match := explanationRegex.FindStringSubmatch(modelOutput); match != nil {
+		mQuestion.Explanation = strings.TrimSpace(match[1])
+	}
+
+	return mQuestion, nil
 }
