@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strings"
 	"sync"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/register"
@@ -34,11 +36,14 @@ func (llm *LLMClient) ProcessElement(ctx context.Context, question *Question) (*
 		return nil, fmt.Errorf("error getting chat completion: %w", err)
 	}
 
-	// Parse Question string to MultipleChoiceQuestion.
-	mQuestion, err := parseLLMOutput(chatRes.Choices[0].Message.Content, question)
+	// Parse parseLLMOutput.
+	llmOutput, err := parseLLMOutput(chatRes.Choices[0].Message.Content)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing LLM response: %w", err)
 	}
+
+	// Parse to MultipleChoiceQuestion
+	mQuestion := parseToMultipleQuestion(question, llmOutput.Choices, llmOutput.Answer, llmOutput.Explanation)
 
 	return mQuestion, nil
 }
@@ -52,4 +57,54 @@ func (llm *LLMClient) setupClient() {
 	llm.once.Do(func() {
 		llm.client = mistral.NewMistralClientDefault("")
 	})
+}
+
+type LLMOutput struct {
+	Choices     []Choice `json:"choices"`
+	Answer      string   `json:"answer"`
+	Explanation string   `json:"explanation"`
+}
+
+func parseLLMOutput(modelOutput string) (*LLMOutput, error) {
+	llmOutput := &LLMOutput{}
+
+	// Regular expressions for parsing
+	choiceRegex := regexp.MustCompile(`([A-D])\. (.*)`)
+	answerRegex := regexp.MustCompile(`Answer: ([A-D])`)
+	explanationRegex := regexp.MustCompile(`Explanation: (.*)`)
+
+	// Split input into lines
+	lines := strings.Split(modelOutput, "\n")
+
+	// Parse choices
+	var currentChoice *Choice
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if match := choiceRegex.FindStringSubmatch(line); match != nil {
+			if currentChoice != nil {
+				llmOutput.Choices = append(llmOutput.Choices, *currentChoice)
+			}
+			currentChoice = &Choice{
+				Label: match[1],
+				Text:  match[2],
+			}
+		} else if currentChoice != nil {
+			currentChoice.Text += " " + line
+		}
+	}
+	if currentChoice != nil {
+		llmOutput.Choices = append(llmOutput.Choices, *currentChoice)
+	}
+
+	// Parse answer
+	if match := answerRegex.FindStringSubmatch(modelOutput); match != nil {
+		llmOutput.Answer = match[1]
+	}
+
+	// Parse explanation
+	if match := explanationRegex.FindStringSubmatch(modelOutput); match != nil {
+		llmOutput.Explanation = strings.TrimSpace(match[1])
+	}
+
+	return llmOutput, nil
 }

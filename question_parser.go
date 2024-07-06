@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"strings"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam"
 )
@@ -24,9 +22,9 @@ type Choice struct {
 
 type MultipleChoiceQuestion struct {
 	Question    *Question
-	Choices     []Choice `json:"choices"`
-	Answer      string   `json:"answer"`
-	Explanation string   `json:"explanation"`
+	Choices     []Choice
+	Answer      string
+	Explanation string
 }
 
 func readQuestions(s beam.Scope, filename string) beam.PCollection {
@@ -103,49 +101,16 @@ func validateQuestion(q *Question) error {
 	return nil
 }
 
-func parseLLMOutput(modelOutput string, originalQuestion *Question) (*MultipleChoiceQuestion, error) {
+func parseToMultipleQuestion(question *Question, choices []Choice, answer, explanation string) *MultipleChoiceQuestion {
 	mQuestion := &MultipleChoiceQuestion{
-		Question: originalQuestion,
-	}
-	originalQuestion.Type = "multiple_choice"
-
-	// Regular expressions for parsing
-	choiceRegex := regexp.MustCompile(`([A-D])\. (.*)`)
-	answerRegex := regexp.MustCompile(`Answer: ([A-D])`)
-	explanationRegex := regexp.MustCompile(`Explanation: (.*)`)
-
-	// Split input into lines
-	lines := strings.Split(modelOutput, "\n")
-
-	// Parse choices
-	var currentChoice *Choice
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if match := choiceRegex.FindStringSubmatch(line); match != nil {
-			if currentChoice != nil {
-				mQuestion.Choices = append(mQuestion.Choices, *currentChoice)
-			}
-			currentChoice = &Choice{
-				Label: match[1],
-				Text:  match[2],
-			}
-		} else if currentChoice != nil {
-			currentChoice.Text += " " + line
-		}
-	}
-	if currentChoice != nil {
-		mQuestion.Choices = append(mQuestion.Choices, *currentChoice)
+		Question:    question,
+		Choices:     choices,
+		Answer:      answer,
+		Explanation: explanation,
 	}
 
-	// Parse answer
-	if match := answerRegex.FindStringSubmatch(modelOutput); match != nil {
-		mQuestion.Answer = match[1]
-	}
+	// Since it has choices, the question's type needs to reflect it
+	question.Type = "multiple_choice"
 
-	// Parse explanation
-	if match := explanationRegex.FindStringSubmatch(modelOutput); match != nil {
-		mQuestion.Explanation = strings.TrimSpace(match[1])
-	}
-
-	return mQuestion, nil
+	return mQuestion
 }
