@@ -3,37 +3,29 @@ package main
 import (
 	"context"
 	"log"
-	"sync"
-	"time"
 
 	"cloud.google.com/go/firestore"
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/register"
 	"google.golang.org/api/option"
 )
 
-// https://firebase.google.com/docs/firestore/manage-data/transactions
-const (
-	maxBatchSize = 100 // A batched write can contain up to 500 operations.
-	maxBatchTime = 1 * time.Second
-)
-
 // FirestoreWriter is a PTransform that writes data to Firestore
 type FirestoreWriter struct {
 	ProjectID  string
 	Collection string
+	CredPath   string
 
-	count      int
-	mu         sync.Mutex
 	client     *firestore.Client
 	bulkWriter *firestore.BulkWriter
-	lastWrite  time.Time
 }
 
 func (f *FirestoreWriter) ProcessElement(ctx context.Context, question *Question) error {
-	// Lock the mutex to ensure thread-safety
-	// This is necessary because ProcessElement might be called concurrently
-	f.mu.Lock()
-	defer f.mu.Unlock()
+	// Lazy initialization
+	if f.client == nil {
+		if err := f.setupClient(ctx); err != nil {
+			return err
+		}
+	}
 
 	// The Firestore's NewDoc() method generates a new document with an auto-generated ID
 	ref := f.client.Collection(f.Collection).NewDoc()
@@ -41,16 +33,6 @@ func (f *FirestoreWriter) ProcessElement(ctx context.Context, question *Question
 	if err != nil {
 		log.Printf("Error queuing write operation: %v", err)
 		return err
-	}
-
-	// This keeps track of how many operations we've queued.
-	f.count++
-
-	// Flexible flushing mechanism. Based on count: When we reach maxBatchSize operations.
-	// Based on time: When maxBatchTime has elapsed since the last flush.
-	// This ensures that we're balancing between efficient batching and timely writes.
-	if f.count >= maxBatchSize || time.Since(f.lastWrite) >= maxBatchTime {
-		f.flush()
 	}
 
 	return nil
@@ -61,20 +43,17 @@ func init() {
 	// 2 inputs and 1 output => DoFn2x1
 	// Type arguments [context.Context, *Question, error]
 	register.DoFn2x1(&FirestoreWriter{})
+	register.Emitter1[error]()
 }
 
-// Called once per bundle
-func (f *FirestoreWriter) Setup(ctx context.Context) error {
-	// initialize the Firestore client
-	client, err := firestore.NewClient(ctx, f.ProjectID, option.WithCredentialsFile(".credentials/firestore.json"))
+func (f *FirestoreWriter) setupClient(ctx context.Context) error {
+	client, err := firestore.NewClient(ctx, f.ProjectID, option.WithCredentialsFile(f.CredPath))
 	if err != nil {
 		return err
 	}
 
-	// Firestore Client, BulkWriter instance
 	f.client = client
 	f.bulkWriter = client.BulkWriter(ctx)
-	f.lastWrite = time.Now()
 	return nil
 }
 
@@ -86,18 +65,7 @@ func (f *FirestoreWriter) Teardown() error {
 }
 
 func (f *FirestoreWriter) FinishBundle(ctx context.Context) {
-	f.flush()
-}
-
-func (f *FirestoreWriter) flush() error {
-	if f.count == 0 {
-		return nil
+	if f.bulkWriter != nil {
+		f.bulkWriter.Flush()
 	}
-
-	f.bulkWriter.Flush()
-	log.Printf("Successfully wrote batch of %d questions", f.count)
-
-	f.count = 0
-	f.lastWrite = time.Now()
-	return nil
 }

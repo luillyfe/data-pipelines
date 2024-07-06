@@ -18,6 +18,7 @@ func main() {
 	// Get env vars
 	PROJECT_ID := os.Getenv("PROJECT_ID")
 	COLLECTION := os.Getenv("COLLECTION")
+	CREDENTIALS_PATH := os.Getenv("CREDENTIALS_PATH")
 
 	// Flag for input and output files
 	input := flag.String("input", "input.txt", "Input file to process")
@@ -45,6 +46,7 @@ func main() {
 	firestoreWriter := &FirestoreWriter{
 		ProjectID:  PROJECT_ID,
 		Collection: COLLECTION,
+		CredPath:   CREDENTIALS_PATH,
 	}
 
 	// Write to Firestore
