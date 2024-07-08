@@ -24,7 +24,7 @@ func (llm *LLMClient) ProcessElement(ctx context.Context, question *Question) (*
 		llm.setupClient()
 	})
 
-	prompt := fmt.Sprintf(`Analyze the following question and provide: 1. Four choices that could be used as answers. 2. Indicate which choice is correct. Question: %s Respond in the following format: Choices: A. [choice1] B. [choice2] C. [choice3] D. [choice4] Answer: [A/B/C/D]`, question.Text)
+	prompt := fmt.Sprintf(`Analyze the following question and provide: 1. Four choices that could be used as answers. 2. Indicate which choice is correct. 3. The choices makes the question easy to answer. Question: %s Respond in the following format: Choices: A. [choice1] B. [choice2] C. [choice3] D. [choice4] Answer: [A/B/C/D]`, question.Text)
 
 	// Using Chat completion
 	chatRes, err := llm.client.Chat(llm.ModelName, []mistral.ChatMessage{{Content: prompt, Role: mistral.RoleUser}}, &mistral.ChatRequestParams{
