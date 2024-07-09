@@ -36,7 +36,7 @@ func (llm *LLMClient) ProcessElement(ctx context.Context, question *Question) (*
 		return nil, fmt.Errorf("error getting chat completion: %w", err)
 	}
 
-	// Parse parseLLMOutput.
+	// Parse LLM Output.
 	llmOutput, err := parseLLMOutput(chatRes.Choices[0].Message.Content)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing LLM response: %w", err)
