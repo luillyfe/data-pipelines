@@ -19,7 +19,7 @@ type FirestoreWriter struct {
 	bulkWriter *firestore.BulkWriter
 }
 
-func (f *FirestoreWriter) ProcessElement(ctx context.Context, question *Question) error {
+func (f *FirestoreWriter) ProcessElement(ctx context.Context, question *MultipleChoiceQuestion) error {
 	// Lazy initialization
 	if f.client == nil {
 		if err := f.setupClient(ctx); err != nil {
@@ -41,9 +41,8 @@ func (f *FirestoreWriter) ProcessElement(ctx context.Context, question *Question
 // This registration is crucial for serialization purposes in distributed processing environments.
 func init() {
 	// 2 inputs and 1 output => DoFn2x1
-	// Type arguments [context.Context, *Question, error]
+	// Type arguments [context.Context, *MultipleChoiceQuestion, error]
 	register.DoFn2x1(&FirestoreWriter{})
-	register.Emitter1[error]()
 }
 
 func (f *FirestoreWriter) setupClient(ctx context.Context) error {

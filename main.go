@@ -42,6 +42,10 @@ func main() {
 	// Filter out nil questions
 	validQuestions = filter.Exclude(s, validQuestions, isNilQuestion)
 
+	// Enrich questions using LLM (Adding 4 choices to questions)
+	llmClient := &LLMClient{ModelName: "mistral-tiny"}
+	mQuestions := beam.ParDo(s, llmClient, validQuestions)
+
 	// Initialize the firestore writer
 	firestoreWriter := &FirestoreWriter{
 		ProjectID:  PROJECT_ID,
@@ -50,7 +54,7 @@ func main() {
 	}
 
 	// Write to Firestore
-	beam.ParDo0(s, firestoreWriter, validQuestions)
+	beam.ParDo0(s, firestoreWriter, mQuestions)
 
 	// Run the pipeline
 	if err := beamx.Run(context.Background(), p); err != nil {

@@ -15,6 +15,18 @@ type Question struct {
 	Labels   []string `json:"labels"`
 }
 
+type Choice struct {
+	Label string `json:"option"`
+	Text  string `json:"description"`
+}
+
+type MultipleChoiceQuestion struct {
+	Question    *Question
+	Choices     []Choice
+	Answer      string
+	Explanation string
+}
+
 func readQuestions(s beam.Scope, filename string) beam.PCollection {
 	s = s.Scope("ReadQuestions")
 
@@ -87,4 +99,18 @@ func validateQuestion(q *Question) error {
 		return fmt.Errorf("question author is empty")
 	}
 	return nil
+}
+
+func parseToMultipleQuestion(question *Question, choices []Choice, answer, explanation string) *MultipleChoiceQuestion {
+	mQuestion := &MultipleChoiceQuestion{
+		Question:    question,
+		Choices:     choices,
+		Answer:      answer,
+		Explanation: explanation,
+	}
+
+	// Since it has choices, the question's type needs to reflect it
+	question.Type = "multiple_choice"
+
+	return mQuestion
 }
