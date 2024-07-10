@@ -42,8 +42,8 @@ func main() {
 	// Filter out nil questions
 	validQuestions = filter.Exclude(s, validQuestions, isNilQuestion)
 
-	// Enrich questions using LLM (Adding 4 choices to questions)
-	llmClient := &LLMClient{ModelName: "mistral-tiny"}
+	// Contextual Data Augmentation With Claude (From free-response to Multiple-Choice Questions)
+	llmClient := &LLMClient{}
 	mQuestions := beam.ParDo(s, llmClient, validQuestions)
 
 	// Initialize the firestore writer
