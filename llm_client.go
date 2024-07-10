@@ -26,7 +26,7 @@ func (llm *LLMClient) ProcessElement(ctx context.Context, question *Question) (*
 		llm.setupClient()
 	})
 
-	prompt := fmt.Sprintf(`Analyze the following question and provide: 1. Four choices that could be used as answers. 2. Indicate which choice is correct. 3. The choices makes the question easy to answer. Question: %s , the question belongs to the following exam's sections: %s and has ben tag with the following labels: %s. Please keep your output scoped to the Google Cloud Platform and respond in the following format: Choices: A. [choice1] B. [choice2] C. [choice3] D. [choice4] Answer: [A/B/C/D]. Please avoid at all cost any comments or explanation!`, question.Text, strings.Join(question.Sections, ","), strings.Join(question.Labels, ","))
+	prompt := fmt.Sprintf(`Analyze the following question and provide: 1. Four choices that could be used as answers. 2. Indicate which choice is correct. 3. The choices makes the question easy to answer. Question: %s , the question belongs to the following exam's sections: %s and has ben tag with the following labels: %s. Please keep your output scoped to the Google Cloud Platform and respond in the following format: Choices: A. [choice1] B. [choice2] C. [choice3] D. [choice4]. Answer: [A/B/C/D]. Explanation: [explanation]. Please avoid at all cost any comments or explanation!`, question.Text, strings.Join(question.Sections, ","), strings.Join(question.Labels, ","))
 
 	// Using Chat completion
 	resp, err := llm.client.CreateMessages(context.Background(), anthropic.MessagesRequest{
@@ -97,7 +97,9 @@ func parseLLMOutput(modelOutput string) (*LLMOutput, error) {
 				Label: match[1],
 				Text:  match[2],
 			}
-		} else if currentChoice != nil {
+		} else if currentChoice != nil &&
+			!strings.HasPrefix(line, "Answer:") &&
+			!strings.HasPrefix(line, "Explanation:") {
 			currentChoice.Text += " " + line
 		}
 	}
