@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -62,7 +63,8 @@ func init() {
 }
 
 func (llm *LLMClient) setupClient() {
-	llm.client = anthropic.NewClient("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")
+	CLAUDE_API_KEY := os.Getenv("CLAUDE_API_KEY")
+	llm.client = anthropic.NewClient(CLAUDE_API_KEY)
 }
 
 type LLMOutput struct {
