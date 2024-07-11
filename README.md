@@ -25,6 +25,7 @@ This project implements a pipeline for contextual data augmentation using Large 
 
 - Go 1.15 or higher
 - Google Cloud Project with Firestore enabled
+- **A service account with the Cloud Datastore User role assigned.**
 - Anthropic API key for access to Claude
 - Apache Beam SDK for Go
 
