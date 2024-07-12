@@ -18,8 +18,11 @@ func NewAnthropicLLM(modelName string) LanguageModel {
 	if modelName == "" {
 		modelName = anthropic.ModelClaudeInstant1Dot2
 	}
+
+	CLAUDE_API_KEY := os.Getenv("CLAUDE_API_KEY")
 	return &AnthropicLLM{
 		ModelName: modelName,
+		client:    anthropic.NewClient(CLAUDE_API_KEY),
 	}
 }
 
@@ -42,9 +45,4 @@ func (a *AnthropicLLM) GenerateText(ctx context.Context, prompt string) (string,
 
 	// return generated text
 	return *resp.Content[0].Text, nil
-}
-
-func (a *AnthropicLLM) SetupClient() {
-	CLAUDE_API_KEY := os.Getenv("CLAUDE_API_KEY")
-	a.client = anthropic.NewClient(CLAUDE_API_KEY)
 }

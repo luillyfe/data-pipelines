@@ -6,5 +6,4 @@ import (
 
 type LanguageModel interface {
 	GenerateText(context.Context, string) (string, error)
-	SetupClient()
 }
