@@ -58,7 +58,6 @@ type LLMOutput struct {
 
 func parseLLMOutput(modelOutput string) (*LLMOutput, error) {
 	llmOutput := &LLMOutput{}
-	fmt.Println(modelOutput)
 
 	// Regular expressions for parsing
 	choiceRegex := regexp.MustCompile(`([A-D])\. (.*)`)
