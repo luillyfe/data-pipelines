@@ -42,9 +42,9 @@ func main() {
 	// Filter out nil questions
 	validQuestions = filter.Exclude(s, validQuestions, isNilQuestion)
 
-	// Contextual Data Augmentation With Claude (From free-response to Multiple-Choice Questions)
-	llmClient := &LLMClient{}
-	mQuestions := beam.ParDo(s, llmClient, validQuestions)
+	// Contextual Data Augmentation (From free-response to Multiple-Choice Questions) using an LLM
+	llmProvider := &LLMProvider{}
+	mQuestions := beam.ParDo(s, llmProvider, validQuestions)
 
 	// Initialize the firestore writer
 	firestoreWriter := &FirestoreWriter{
