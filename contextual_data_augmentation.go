@@ -2,69 +2,52 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"os"
 	"regexp"
 	"strings"
 	"sync"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam/register"
-	"github.com/liushuangls/go-anthropic/v2"
+	"github.com/luillyfe/data-pipelines/llm"
 )
 
-// LLMClient is a PTransform that enriches questions with multiple choice options using an LLM
-type LLMClient struct {
-	ModelName string
-	client    *anthropic.Client
-	once      sync.Once
+// ContextualDataAugmentation is a PTransform that uses an LLM for Contextual Data Augmentation
+type ContextualDataAugmentation struct {
+	model llm.LanguageModel
+	once  sync.Once
 }
 
-func (llm *LLMClient) ProcessElement(ctx context.Context, question *Question) (*MultipleChoiceQuestion, error) {
+func (cda *ContextualDataAugmentation) ProcessElement(ctx context.Context, question *Question) (*MultipleChoiceQuestion, error) {
 	// Lazy initialization
-	llm.once.Do(func() {
-		llm.setupClient()
+	cda.once.Do(func() {
+		cda.model = llm.NewAnthropicLLM("")
 	})
 
+	// Building the prompt
 	prompt := fmt.Sprintf(`Analyze the following question and provide: 1. Four choices that could be used as answers. 2. Indicate which choice is correct. 3. The choices makes the question easy to answer. Question: %s , the question belongs to the following exam's sections: %s and has ben tag with the following labels: %s. Please keep your output scoped to the Google Cloud Platform and respond in the following format: Choices: A. [choice1] B. [choice2] C. [choice3] D. [choice4]. Answer: [A/B/C/D]. Explanation: [explanation]. Please avoid at all cost any comments or explanation!`, question.Text, strings.Join(question.Sections, ","), strings.Join(question.Labels, ","))
 
-	// Using Chat completion
-	resp, err := llm.client.CreateMessages(context.Background(), anthropic.MessagesRequest{
-		Model: anthropic.ModelClaudeInstant1Dot2,
-		Messages: []anthropic.Message{
-			anthropic.NewUserTextMessage(prompt),
-		},
-		MaxTokens: 1000,
-	})
+	// Using chat completion
+	llmOutput, err := cda.model.GenerateText(ctx, prompt)
 	if err != nil {
-		var e *anthropic.APIError
-		if errors.As(err, &e) {
-			fmt.Printf("Messages error, type: %s, message: %s", e.Type, e.Message)
-		} else {
-			fmt.Printf("Messages error: %v\n", err)
-		}
+		return nil, fmt.Errorf("error in generating text from LLM: %w", err)
 	}
 
 	// Parse LLM Output.
-	llmOutput, err := parseLLMOutput(*resp.Content[0].Text)
+	ParsedLLMOutput, err := parseLLMOutput(llmOutput)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing LLM response: %w", err)
 	}
 
 	// Parse to MultipleChoiceQuestion
-	mQuestion := parseToMultipleQuestion(question, llmOutput.Choices, llmOutput.Answer, llmOutput.Explanation)
+	mQuestion := parseToMultipleQuestion(question, ParsedLLMOutput.Choices, ParsedLLMOutput.Answer, ParsedLLMOutput.Explanation)
 
+	// Return
 	return mQuestion, nil
 }
 
 func init() {
 	// type arguments [context.Context, *Question, *MultipleChoiceQuestion, error]
-	register.DoFn2x2(&LLMClient{})
-}
-
-func (llm *LLMClient) setupClient() {
-	CLAUDE_API_KEY := os.Getenv("CLAUDE_API_KEY")
-	llm.client = anthropic.NewClient(CLAUDE_API_KEY)
+	register.DoFn2x2(&ContextualDataAugmentation{})
 }
 
 type LLMOutput struct {
@@ -75,7 +58,6 @@ type LLMOutput struct {
 
 func parseLLMOutput(modelOutput string) (*LLMOutput, error) {
 	llmOutput := &LLMOutput{}
-	fmt.Println(modelOutput)
 
 	// Regular expressions for parsing
 	choiceRegex := regexp.MustCompile(`([A-D])\. (.*)`)
