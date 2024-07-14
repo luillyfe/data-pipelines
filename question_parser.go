@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/apache/beam/sdks/v2/go/pkg/beam"
 )
@@ -16,15 +17,34 @@ type Question struct {
 }
 
 type Choice struct {
-	Label string `json:"option"`
-	Text  string `json:"description"`
+	Label     string `json:"option"`
+	Text      string `json:"description"`
+	IsCorrect bool   `json:"is_correct" firestore:"is_correct"`
 }
 
+// MultipleChoiceQuestion represents the structure for multiple-choice questions
 type MultipleChoiceQuestion struct {
-	Question    *Question
-	Choices     []Choice
-	Answer      string
-	Explanation string
+	// Identification: Ensures uniqueness across distributed systems
+	ID     string `json:"id" firestore:"id"`         // Unique identifier for the question
+	Author string `json:"author" firestore:"author"` // Creator of the question
+
+	// Question Content: Could support adaptive testing
+	OriginalText     string   `json:"original_text" firestore:"original_text"`         // Initial wording of the question
+	ReformulatedText string   `json:"reformulated_text" firestore:"reformulated_text"` // Alternative or improved wording
+	Choices          []Choice `json:"choices" firestore:"choices"`                     // Array of possible answers
+	Explanation      string   `json:"explanation" firestore:"explanation"`             // Clarification of the correct answer
+
+	// Categorization: It will help in creating concept maps and learning pathways
+	Sections        []string `json:"sections" firestore:"sections"`                 // Topic areas the question belongs to
+	Labels          []string `json:"labels" firestore:"labels"`                     // Tags for additional categorization
+	CoreConcept     string   `json:"core_concept" firestore:"core_concept"`         // Main idea being tested
+	QuestionType    string   `json:"question_type" firestore:"question_type"`       // How challenging the question is
+	DifficultyLevel string   `json:"difficulty_level" firestore:"difficulty_level"` // Type of question ("multiple choice")
+
+	// Metadata: It might be use them for audit trails
+	CreatedAt   time.Time `json:"created_at" firestore:"created_at"`     // When the question was first created
+	UpdatedAt   time.Time `json:"updated_at" firestore:"updated_at"`     // When the question was last modified
+	IsPublished bool      `json:"is_published" firestore:"is_published"` // Whether the question is available for use
 }
 
 func readQuestions(s beam.Scope, filename string) beam.PCollection {
@@ -101,16 +121,30 @@ func validateQuestion(q *Question) error {
 	return nil
 }
 
-func parseToMultipleQuestion(question *Question, choices []Choice, answer, explanation string) *MultipleChoiceQuestion {
-	mQuestion := &MultipleChoiceQuestion{
-		Question:    question,
-		Choices:     choices,
-		Answer:      answer,
-		Explanation: explanation,
+// Helper function to convert QuestionData to MultipleChoiceQuestion
+func ConvertToMultipleChoiceQuestion(originalQuestion *Question, questionData *ParsedDataFromLLM) MultipleChoiceQuestion {
+	choices := make([]Choice, 0, len(questionData.Choices))
+	for letter, text := range questionData.Choices {
+		choices = append(choices, Choice{
+			Text:      text,
+			IsCorrect: letter == questionData.CorrectAnswer,
+		})
 	}
 
-	// Since it has choices, the question's type needs to reflect it
-	question.Type = "multiple_choice"
-
-	return mQuestion
+	return MultipleChoiceQuestion{
+		// ID:               originalQuestion.ID,
+		OriginalText:     originalQuestion.Text,
+		ReformulatedText: questionData.ReformulatedQuestion,
+		Author:           originalQuestion.Author,
+		Sections:         originalQuestion.Sections,
+		Labels:           originalQuestion.Labels,
+		Choices:          choices,
+		Explanation:      questionData.Explanation,
+		CoreConcept:      questionData.CoreConcept,
+		DifficultyLevel:  questionData.DifficultyLevel,
+		QuestionType:     questionData.QuestionType,
+		CreatedAt:        time.Now(),
+		UpdatedAt:        time.Now(),
+		IsPublished:      false, // Default to unpublished
+	}
 }
