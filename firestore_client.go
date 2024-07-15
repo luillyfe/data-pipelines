@@ -29,6 +29,8 @@ func (f *FirestoreWriter) ProcessElement(ctx context.Context, question *Multiple
 
 	// The Firestore's NewDoc() method generates a new document with an auto-generated ID
 	ref := f.client.Collection(f.Collection).NewDoc()
+	// Set the ID of the question to the auto-generated document ID
+	question.ID = ref.ID
 	_, err := f.bulkWriter.Create(ref, question)
 	if err != nil {
 		log.Printf("Error queuing write operation: %v", err)
