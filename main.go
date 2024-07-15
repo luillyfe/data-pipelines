@@ -19,6 +19,7 @@ func main() {
 	PROJECT_ID := os.Getenv("PROJECT_ID")
 	COLLECTION := os.Getenv("COLLECTION")
 	CREDENTIALS_PATH := os.Getenv("CREDENTIALS_PATH")
+	PROMPT_FILE := os.Getenv("PROMPT_FILE")
 
 	// Flag for input and output files
 	input := flag.String("input", "input.txt", "Input file to process")
@@ -43,7 +44,7 @@ func main() {
 	validQuestions = filter.Exclude(s, validQuestions, isNilQuestion)
 
 	// Contextual Data Augmentation (From free-response to Multiple-Choice Questions)
-	contextualDataAugmentation := &ContextualDataAugmentation{}
+	contextualDataAugmentation := &ContextualDataAugmentation{PromptFile: PROMPT_FILE}
 	mQuestions := beam.ParDo(s, contextualDataAugmentation, validQuestions)
 
 	// Initialize the firestore writer
