@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"regexp"
 	"strings"
 	"sync"
 
@@ -13,8 +12,9 @@ import (
 
 // ContextualDataAugmentation is a PTransform that uses an LLM for Contextual Data Augmentation
 type ContextualDataAugmentation struct {
-	model llm.LanguageModel
-	once  sync.Once
+	PromptFile string
+	model      llm.LanguageModel
+	once       sync.Once
 }
 
 func (cda *ContextualDataAugmentation) ProcessElement(ctx context.Context, question *Question) (*MultipleChoiceQuestion, error) {
@@ -24,10 +24,11 @@ func (cda *ContextualDataAugmentation) ProcessElement(ctx context.Context, quest
 	})
 
 	// Building the prompt
-	prompt := fmt.Sprintf(`Analyze the following question and provide: 1. Four choices that could be used as answers. 2. Indicate which choice is correct. 3. The choices makes the question easy to answer. Question: %s , the question belongs to the following exam's sections: %s and has ben tag with the following labels: %s. Please keep your output scoped to the Google Cloud Platform and respond in the following format: Choices: A. [choice1] B. [choice2] C. [choice3] D. [choice4]. Answer: [A/B/C/D]. Explanation: [explanation]. Please avoid at all cost any comments or explanation!`, question.Text, strings.Join(question.Sections, ","), strings.Join(question.Labels, ","))
+	prompt := readFile(cda.PromptFile)
+	formattedPrompt := fmt.Sprintf(prompt, question.Text, strings.Join(question.Sections, ","), strings.Join(question.Labels, ","))
 
 	// Using chat completion
-	llmOutput, err := cda.model.GenerateText(ctx, prompt)
+	llmOutput, err := cda.model.GenerateText(ctx, formattedPrompt)
 	if err != nil {
 		return nil, fmt.Errorf("error in generating text from LLM: %w", err)
 	}
@@ -39,10 +40,10 @@ func (cda *ContextualDataAugmentation) ProcessElement(ctx context.Context, quest
 	}
 
 	// Parse to MultipleChoiceQuestion
-	mQuestion := parseToMultipleQuestion(question, ParsedLLMOutput.Choices, ParsedLLMOutput.Answer, ParsedLLMOutput.Explanation)
+	mQuestion := ConvertToMultipleChoiceQuestion(question, ParsedLLMOutput)
 
 	// Return
-	return mQuestion, nil
+	return &mQuestion, nil
 }
 
 func init() {
@@ -50,54 +51,70 @@ func init() {
 	register.DoFn2x2(&ContextualDataAugmentation{})
 }
 
-type LLMOutput struct {
-	Choices     []Choice `json:"choices"`
-	Answer      string   `json:"answer"`
-	Explanation string   `json:"explanation"`
+type ParsedDataFromLLM struct {
+	ReformulatedQuestion string
+	Choices              map[string]string
+	CorrectAnswer        string
+	Explanation          string
+	CoreConcept          string
+	DifficultyLevel      string
+	QuestionType         string
 }
 
-func parseLLMOutput(modelOutput string) (*LLMOutput, error) {
-	llmOutput := &LLMOutput{}
+func parseLLMOutput(output string) (*ParsedDataFromLLM, error) {
+	lines := strings.Split(output, "\n")
+	data := &ParsedDataFromLLM{
+		Choices: make(map[string]string),
+	}
 
-	// Regular expressions for parsing
-	choiceRegex := regexp.MustCompile(`([A-D])\. (.*)`)
-	answerRegex := regexp.MustCompile(`Answer: ([A-D])`)
-	explanationRegex := regexp.MustCompile(`Explanation: (.*)`)
-
-	// Split input into lines
-	lines := strings.Split(modelOutput, "\n")
-
-	// Parse choices
-	var currentChoice *Choice
+	var currentSection string
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if match := choiceRegex.FindStringSubmatch(line); match != nil {
-			if currentChoice != nil {
-				llmOutput.Choices = append(llmOutput.Choices, *currentChoice)
+
+		switch {
+		case strings.HasPrefix(line, "Reformulated Question:"):
+			currentSection = "question"
+			data.ReformulatedQuestion = strings.TrimPrefix(line, "Reformulated Question:")
+		case line == "Choices:":
+			currentSection = "choices"
+		case strings.HasPrefix(line, "Correct Answer:"):
+			data.CorrectAnswer = strings.TrimSpace(strings.TrimPrefix(line, "Correct Answer:"))
+		case strings.HasPrefix(line, "Explanation:"):
+			currentSection = "explanation"
+			data.Explanation = strings.TrimPrefix(line, "Explanation:")
+		case strings.HasPrefix(line, "Analysis:"):
+			currentSection = "analysis"
+		case strings.HasPrefix(line, "- Core Concept:"):
+			data.CoreConcept = strings.TrimPrefix(line, "- Core Concept:")
+		case strings.HasPrefix(line, "- Difficulty Level:"):
+			data.DifficultyLevel = strings.TrimPrefix(line, "- Difficulty Level:")
+		case strings.HasPrefix(line, "- Question Type:"):
+			data.QuestionType = strings.TrimPrefix(line, "- Question Type:")
+		default:
+			switch currentSection {
+			case "choices":
+				parts := strings.SplitN(line, ".", 2)
+				if len(parts) == 2 {
+					data.Choices[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
+				}
+			case "explanation":
+				data.Explanation += " " + line
 			}
-			currentChoice = &Choice{
-				Label: match[1],
-				Text:  match[2],
-			}
-		} else if currentChoice != nil &&
-			!strings.HasPrefix(line, "Answer:") &&
-			!strings.HasPrefix(line, "Explanation:") {
-			currentChoice.Text += " " + line
 		}
 	}
-	if currentChoice != nil {
-		llmOutput.Choices = append(llmOutput.Choices, *currentChoice)
+
+	// Trim any leading/trailing whitespace
+	data.ReformulatedQuestion = strings.TrimSpace(data.ReformulatedQuestion)
+	data.Explanation = strings.TrimSpace(data.Explanation)
+	data.CoreConcept = strings.TrimSpace(data.CoreConcept)
+	data.DifficultyLevel = strings.TrimSpace(data.DifficultyLevel)
+	data.QuestionType = strings.TrimSpace(data.QuestionType)
+
+	// Validate that we've extracted all required fields
+	if data.ReformulatedQuestion == "" || len(data.Choices) != 4 || data.CorrectAnswer == "" ||
+		data.Explanation == "" || data.CoreConcept == "" || data.DifficultyLevel == "" || data.QuestionType == "" {
+		return nil, fmt.Errorf("failed to extract all required fields from LLM output")
 	}
 
-	// Parse answer
-	if match := answerRegex.FindStringSubmatch(modelOutput); match != nil {
-		llmOutput.Answer = match[1]
-	}
-
-	// Parse explanation
-	if match := explanationRegex.FindStringSubmatch(modelOutput); match != nil {
-		llmOutput.Explanation = strings.TrimSpace(match[1])
-	}
-
-	return llmOutput, nil
+	return data, nil
 }
