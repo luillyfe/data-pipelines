@@ -24,7 +24,10 @@ func (cda *ContextualDataAugmentation) ProcessElement(ctx context.Context, quest
 	})
 
 	// Building the prompt
-	prompt := readFile(cda.PromptFile)
+	prompt, err := readFile(cda.PromptFile)
+	if err != nil {
+		return nil, fmt.Errorf("error in reading the prompt from file: %w", err)
+	}
 	formattedPrompt := fmt.Sprintf(prompt, question.Text, strings.Join(question.Sections, ","), strings.Join(question.Labels, ","))
 
 	// Using chat completion

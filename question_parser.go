@@ -53,16 +53,22 @@ func readQuestions(s beam.Scope, filename string) beam.PCollection {
 	// ARD: Read the file at once. We need access to the whole json
 	// byte string at once (indented json) to be able to unmarshal it
 	// to the proper struct.
-	jsonContent := readFile(filename)
+	jsonContent, err := readFile(filename)
+	if err != nil {
+		return beam.PCollection{}
+	}
 
 	// Create a PCollection
-	questionsString := createPCollection(s, jsonContent)
+	questionsString, err := createPCollection(s, jsonContent)
+	if err != nil {
+		return beam.PCollection{}
+	}
 
 	// Parse a PCollection of []any to a PCollection of []Question
 	questions := beam.ParDo(s, func(question string, emit func(*Question)) {
 		var q Question
 		if err := json.Unmarshal([]byte(question), &q); err != nil {
-			fmt.Errorf("Error during Unmarshal(): %w", err)
+			fmt.Println(fmt.Errorf("error during Unmarshal(): %w", err))
 			return
 		}
 		emit(&q)
@@ -71,7 +77,7 @@ func readQuestions(s beam.Scope, filename string) beam.PCollection {
 	return questions
 }
 
-func createPCollection(s beam.Scope, data string) beam.PCollection {
+func createPCollection(s beam.Scope, data string) (beam.PCollection, error) {
 	s = s.Scope("CreatePCollection")
 
 	// Create a slice to hold the questions
@@ -80,11 +86,11 @@ func createPCollection(s beam.Scope, data string) beam.PCollection {
 	// Unmarshal the JSON data into the slice of Question structs
 	err := json.Unmarshal([]byte(data), &questions)
 	if err != nil {
-		fmt.Errorf("Error during Unmarshal(): %w", err)
+		return beam.PCollection{}, fmt.Errorf("error during Unmarshal(): %w", err)
 	}
 
 	// In order to create a PCollection of individual questions you must cast []Question to []any
-	return beam.Create(s, questionsToAny(questions)...)
+	return beam.Create(s, questionsToAny(questions)...), nil
 }
 
 // Function to convert a slice of Question to a slice of any
@@ -94,7 +100,7 @@ func questionsToAny(questions []Question) []any {
 		// Marshal the Question struct to JSON
 		jsonBytes, err := json.Marshal(q)
 		if err != nil {
-			fmt.Errorf("Error marshalling Question to JSON: %w", err)
+			fmt.Println(fmt.Errorf("error marshalling Question to JSON: %w", err))
 			continue // Skip to the next question if there's an error
 		}
 

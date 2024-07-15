@@ -6,13 +6,12 @@ import (
 	"os"
 )
 
-func readFile(filename string) string {
+func readFile(filename string) (string, error) {
 	var data string
 
 	file, err := os.Open(filename)
 	if err != nil {
-		fmt.Errorf("Error when opening file: %w", err)
-		return ""
+		return "", fmt.Errorf("error when opening file: %w", err)
 	}
 	defer file.Close()
 
@@ -21,9 +20,8 @@ func readFile(filename string) string {
 		data += scanner.Text()
 	}
 	if err := scanner.Err(); err != nil {
-		fmt.Errorf("Error when opening file: %w", err)
-		return ""
+		return "", fmt.Errorf("error when reading file: %w", err)
 	}
 
-	return data
+	return data, nil
 }
